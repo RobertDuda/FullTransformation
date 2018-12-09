@@ -2,7 +2,14 @@ package de.hu_berlin.informatik.transformer;
 
 
 import java.beans.FeatureDescriptor;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.io.Writer;
 import java.lang.annotation.Repeatable;
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -60,7 +67,6 @@ public class Transformer {
 	
 	
 	public Transformer() {
-		// TODO Auto-generated constructor stub
 		
 		gateList = new LinkedList<>();
 		eventList = new LinkedList<>();
@@ -166,8 +172,25 @@ public class Transformer {
 				dependencyList.add(tmpE.getDependency());
 			}
 			
-			eventList.add(eventQueue.poll());
+			//eventList.add(eventQueue.poll());
 			
+			/*
+			 * test duplicate events
+			 */
+			//compare the values of two events, if they are identical, they are the same
+			boolean identical = false;
+			for(int i = 0; i < eventList.size(); i++) {
+				if (eventList.get(i).getName().equals(tmpE.getName())) {
+					System.out.println("same names: " + eventList.get(i).getName() + ", " + tmpE.getName());
+					identical = true;
+				}
+			}
+			//add event to list, skip duplicates
+			if (identical == false) {
+				eventList.add(eventQueue.poll());
+			}else {
+				eventQueue.poll();
+			}
 		}
 		
 		for(int d = 0; d < dependencyList.size(); d++) {
@@ -216,14 +239,15 @@ public class Transformer {
 			stateList.add(checkGates(newState));
 		}
 		
-		/*System.out.println("states:");
+		//testOut
+		System.out.println("states:");
 		for(int j = 0; j < stateList.size(); j++) {
-			//System.out.println("list entry nr " + j +":");
+			System.out.print("list entry nr " + j +": ");
 			for(int k = 0; k < stateList.get(j).length; k++) {
-				System.out.print(stateList.get(j)[k]);
+				System.out.print(+ stateList.get(j)[k]);
 			}
 			System.out.println("");
-		}*/
+		}
 		
 		//fail safe check
 		//setup for fs check
@@ -257,25 +281,54 @@ public class Transformer {
 			    	    prioListPAND.set(prioListPAND.get(j).getSequencePosition(), prioListPAND.get(j));
 			        }
 			        //check for fail safety
-			        //case 1: if we have a leading 0, we can't transition to a non-fs state(state with leading 1)
-			        //e.g. 0010
+			        //case 1: if we have a leading 0, we can't transition to a non-fs state(state with leading 1), unless every value is 0
+			        //e.g. PAND(0010)
 			        int firstIndexPAND = 0;
 			        if (prioListPAND.getFirst().eClass().getName() == "Event") {
-						eventList.indexOf(prioListPAND.getFirst());
+						//firstIndexPAND = eventList.indexOf(prioListPAND.getFirst());
+			        	//duplicate test
+			    		for(int ind = 0; ind < eventList.size(); ind++) {
+			    			if (eventList.get(ind).getName().equals(prioListPAND.getFirst().getName())) {
+								firstIndexPAND = ind;
+							}
+			    		}
+			    		//duplicate test end
 					}else {
-						gateList.indexOf(prioListPAND.getFirst());
+						firstIndexPAND = gateList.indexOf(prioListPAND.getFirst());
 					}
 			        
 			        if (stateList.get(h)[firstIndexPAND] == 0) {
-						failSafeList.get(h)[i] = true;
+						//check if the rest is 0
+			        	for(int j = 1; j < prioListPAND.size(); j++) {
+			        		if (prioListPAND.get(j).eClass().getName() == "Event") {
+								for(int k = 0; k < eventList.size(); k++) {
+									if (eventList.get(k).getName().equals(prioListPAND.get(j).getName())) {
+										if (stateList.get(h)[k] == 1) {
+											failSafeList.get(h)[i] = true;
+										}
+									}
+								}
+							}else {
+								if (stateList.get(h)[gateList.indexOf(prioListPAND.get(j))] == 1) {
+									failSafeList.get(h)[i] = true;
+								}
+							}
+			        	}
 					}else {
 						//case 2: after leading 1s we have 0s and than another 1
 			            //the 0s in between can't become 1s
 			            int series = 0;
 			            for(int j = 0; j < prioListPAND.size(); j++) {
-			            	int index;
+			            	int index = 0;
 						    if(prioListPAND.get(j).eClass().getName() == "Event") {
-							    index = eventList.indexOf(prioListPAND.get(j));
+							    //index = eventList.indexOf(prioListPAND.get(j));
+						    	//duplicate test
+						    	for(int inde = 0; inde < eventList.size(); inde++) {
+						    		if (eventList.get(inde).getName().equals(prioListPAND.get(j).getName())) {
+										index = inde;
+									}
+						    	}
+						    	//duplicate test end
 						    }else {
 							    index = gateList.indexOf(prioListPAND.get(j)) + eventList.size();
 						    }
@@ -304,7 +357,7 @@ public class Transformer {
 				    for(int j = 0; j < prioListPOR.size(); j++) {
 				    	prioListPOR.set(prioListPOR.get(j).getSequencePosition(), prioListPOR.get(j));
 				    }
-				    //case 1: check if we have a leading zero -> fs
+				    //case 1: check if we have a leading zero -> fs, unless every value is 0
 				    //get the index
 				    int firstIndexPOR = 0;
 				    if(prioListPOR.getFirst().eClass().getName() == "Event") {
@@ -314,14 +367,37 @@ public class Transformer {
 				    }
 				    //check if its zero
 				    if (stateList.get(h)[firstIndexPOR] == 0) {
-						failSafeList.get(h)[i] = true;
+				    	//check if the rest is 0
+			        	for(int j = 1; j < prioListPOR.size(); j++) {
+			        		if (prioListPOR.get(j).eClass().getName() == "Event") {
+								for(int k = 0; k < eventList.size(); k++) {
+									if (eventList.get(k).getName().equals(prioListPOR.get(j).getName())) {
+										if (stateList.get(h)[k] == 1) {
+											failSafeList.get(h)[i] = true;
+										}
+									}
+								}
+							}else {
+								if (stateList.get(h)[gateList.indexOf(prioListPOR.get(j))] == 1) {
+									failSafeList.get(h)[i] = true;
+								}
+							}
+			        	}
 					}else {
 						//case 2: check if we have a fail after a series -> fs
 					    int seriesPOR = 0;
 					    for(int j = 0; j < prioListPOR.size(); j++) {
 			            	int index;
 						    if(prioListPOR.get(j).eClass().getName() == "Event") {
-							    index = eventList.indexOf(prioListPOR.get(j));
+							    //index = eventList.indexOf(prioListPOR.get(j));
+						    	//duplicate test
+						    	index = 0;
+						    	for(int dex = 0; dex < eventList.size(); dex ++) {
+						    		if (eventList.get(dex).getName().equals(prioListPOR.get(j).getName())) {
+										index = dex;
+									}
+						    	}
+						    	//duplicate test end
 						    }else {
 							    index = gateList.indexOf(prioListPOR.get(j)) + eventList.size();
 						    }
@@ -347,7 +423,15 @@ public class Transformer {
 			    		}
 			    	}
 			        for(int j = 0; j < gateList.get(i).getChildEvent().size(); j++) {
-			        	int index = eventList.indexOf(gateList.get(i).getChildEvent().get(j));
+			        	//int index = eventList.indexOf(gateList.get(i).getChildEvent().get(j));
+			        	//duplicate test
+			        	int index = 0;
+			        	for(int idex = 0; idex < eventList.size(); idex++) {
+			        		if (eventList.get(idex).getName().equals(gateList.get(i).getChildEvent().get(j).getName())) {
+								index = idex;
+							}
+			        	}
+			        	//duplicate test end
 			        	if(stateList.get(h)[index] == 1) {
 			        		failedChildren++;
 			        	}
@@ -363,7 +447,15 @@ public class Transformer {
 				int count = 0;
 				for(int i = 0; i < seqList.size(); i++) {
 					for(int j = 0; j < seqList.get(i).getEvents().size(); j++) {
-						int index = eventList.indexOf(seqList.get(i).getEvents().get(j));
+						//int index = eventList.indexOf(seqList.get(i).getEvents().get(j));
+						//duplicate test
+						int index = 0;
+						for(int k = 0; k < eventList.size(); k++) {
+							if (eventList.get(k).getName().equals(seqList.get(i).getEvents().get(j).getName())) {
+								index = k;
+							}
+						}
+						//duplicat test end
 						if (stateList.get(h)[index] == 1) {
 							if (count == j) {
 								count++;
@@ -375,7 +467,8 @@ public class Transformer {
 				}
 			}
 		}
-		/*System.out.println("failSafeList:");
+		//testOut
+		System.out.println("failSafeList:");
 		for(int i = 0; i < failSafeList.size(); i++) {
 			for(int j = 0; j < failSafeList.getFirst().length; j++) {
 				System.out.print(failSafeList.get(i)[j] + " ");
@@ -388,7 +481,7 @@ public class Transformer {
 				System.out.print(seqFailList.get(i)[j] + " ");
 			}
 			System.out.println(i);
-		}*/
+		}
 		
 		//creating the transition list
 		//gates are checkt for fail safey, can't transition from fail safe to non fail safe, same for sequences
@@ -438,14 +531,15 @@ public class Transformer {
 			}
 			i++;
 		}
-		/*System.out.println("transitions: ");
+		//testOut
+		System.out.println("transitions: ");
 		for(int l = 0; l < transitionList.size(); l++) {
 			System.out.print("transition nr " + l + ": ");
 			for(int m = 0; m < transitionList.getFirst().length; m++) {
 				System.out.print(transitionList.get(l)[m]+", ");
 			}
 			System.out.println("");
-		}*/
+		}
 		
 		//transitions triggered by functional dependencies
 		if(!fDepList.isEmpty()) {
@@ -527,7 +621,8 @@ public class Transformer {
 				}
 			}
 		}
-		/*if (!fDepTransition.isEmpty()) {
+		//testOut
+		if (!fDepTransition.isEmpty()) {
 			System.out.println("functionally dependent transitions:");
 		}
 		for(int k = 0; k < fDepTransition.size(); k++) {
@@ -536,7 +631,7 @@ public class Transformer {
 				System.out.print(fDepTransition.get(k)[l] +", ");
 			}
 			System.out.println("");
-		}*/
+		}
 		
 		//merging end states; states where the top level event failed
 		//all states get merged into the first one in the list
@@ -591,7 +686,15 @@ public class Transformer {
 		int seqSeries = 0;
 		for(int a = 0; a < seqList.size(); a++) {
 			for(int b = 0; b < seqList.get(a).getEvents().size(); b++) {
-				int eventIndex = eventList.indexOf(seqList.get(a).getEvents().get(b));
+				//int eventIndex = eventList.indexOf(seqList.get(a).getEvents().get(b));
+				//test duplicate
+				int eventIndex = 0;
+				for(int c = 0; c < eventList.size(); c++) {
+					if (eventList.get(c).getName().equals(seqList.get(a).getEvents().get(b).getName())) {
+						eventIndex = c;
+					}
+				}
+				//test duplicate end
 				if (seqFailed[a] == false) {
 					if (state[eventIndex] == 1) {
 						if (seqSeries == b) {
@@ -626,20 +729,38 @@ public class Transformer {
 			    int andFailed = 0;
 			    if(!checkGate.getChildEvent().isEmpty()) {
 			    	for(int j = 0; j < checkGate.getChildEvent().size() ; j++) {
-				    	int eventIndex = eventList.indexOf(checkGate.getChildEvent().get(j));
+				    	//int eventIndex = eventList.indexOf(checkGate.getChildEvent().get(j));
+			    		//duplicate test
+			    		int eventIndex = 0;
+			    		String eventName = checkGate.getChildEvent().get(j).getName();
+			    		for(int eIndex = 0; eIndex < eventList.size(); eIndex++) {
+			    			if (eventList.get(eIndex).getName().equals(eventName)) {
+								eventIndex = eIndex;
+							}
+			    		}
+			    		
 				    	if(state[eventIndex] == 1) {
 				    		//check if we have to consider a sequence
 				    		if (seqList.isEmpty()) {
 								andFailed++;
 							}else {
 								for(int k = 0; k < seqList.size(); k++) {
-									if (seqList.get(k).getEvents().contains(eventList.get(eventIndex))) {
+									/*if (seqList.get(k).getEvents().contains(eventList.get(eventIndex))) {
 										if(seqFailed[k] == false) {
 											andFailed++;
 										}
 									}else {
 										andFailed++;
+									}*/
+									//duplicate test
+									if (seqList.get(k).getEvents().contains(checkGate.getChildEvent().get(j))) {
+										if (seqFailed[k] == false) {
+											andFailed++;
+										}
+									}else {
+										andFailed++;
 									}
+									//duplicate test end
 								}
 							}
 				    	}
@@ -696,20 +817,38 @@ public class Transformer {
 			    int sequenceCheck = 0;
 			    for(int j = 0; j < childSequence.size(); j++) {
 			    	if(childSequence.get(j).eClass().getName() == "Event") {
-			    		int childIndex = eventList.indexOf(childSequence.get(j));
+			    		//int childIndex = eventList.indexOf(childSequence.get(j));
+			    		//duplicate test
+			    		String eventName = checkGate.getChildEvent().get(j).getName();
+			    		int childIndex = 0;
+			    		for(int eIndex = 0; eIndex < eventList.size(); eIndex++) {
+			    			if (eventList.get(eIndex).getName().equals(eventName)) {
+								childIndex = eIndex;
+							}
+			    		}
+			    		//duplicate test end
 			    		if((state[childIndex] == 1) && (sequenceCheck == j)) {
 			    			//check if there is a sequence to consider
 			    			if (seqList.isEmpty()) {
 								sequenceCheck++;
 							}else {
 								for(int k = 0; k < seqList.size(); k++) {
-									if (seqList.get(k).getEvents().contains(eventList.get(childIndex))) {
+									/*if (seqList.get(k).getEvents().contains(eventList.get(childIndex))) {
 										if(seqFailed[k] == false) {
 											sequenceCheck++;
 										}
 									}else {
 										sequenceCheck++;
+									}*/
+									//duplicate test
+									if (seqList.get(k).getEvents().contains(checkGate.getChildEvent().get(j))) {
+										if (seqFailed[k] == false) {
+											sequenceCheck++;
+										}
+									} else {
+										sequenceCheck++;
 									}
+									//duplicate test end
 								}
 							}
 			    		}
@@ -732,7 +871,16 @@ public class Transformer {
 			    //check the child events
 			    if(!checkGate.getChildEvent().isEmpty()) {
 			    	for(int j = 0; j < checkGate.getChildEvent().size(); j++) {
-			    		int eventIndex = eventList.indexOf(checkGate.getChildEvent().get(j));
+			    		//int eventIndex = eventList.indexOf(checkGate.getChildEvent().get(j));
+			    		//duplicate test
+			    		String eventName = checkGate.getChildEvent().get(j).getName();
+			    		int eventIndex = 0;
+			    		for(int eIndex = 0; eIndex < eventList.size(); eIndex++) {
+			    			if (eventList.get(eIndex).getName().equals(eventName)) {
+								eventIndex = eIndex;
+							}
+			    		}
+			    		//duplicate test end
 				    	if(state[eventIndex] == 1) {
 				    		//check if there is a sequence
 				    		if (seqList.isEmpty()) {
@@ -740,7 +888,9 @@ public class Transformer {
 					    		break;
 							}else {
 								for(int k = 0; k < seqList.size(); k++) {
-									if (seqList.get(k).getEvents().contains(eventList.get(eventIndex))) {
+									//if (seqList.get(k).getEvents().contains(eventList.get(eventIndex))) {
+									//duplicate test if
+									if(seqList.get(k).getEvents().contains(checkGate.getChildEvent().get(j))) {
 										if(seqFailed[k] == false) {
 											orFailed = true;
 											break;
@@ -773,7 +923,16 @@ public class Transformer {
 				int xORCheck = 0;
 				if(!checkGate.getChildEvent().isEmpty()) {
 					for(int j = 0; j < checkGate.getChildEvent().size(); j++) {
-						int eventIndex = eventList.indexOf(checkGate.getChildEvent().get(j));
+						//int eventIndex = eventList.indexOf(checkGate.getChildEvent().get(j));
+						//duplicate test
+			    		String eventName = checkGate.getChildEvent().get(j).getName();
+			    		int eventIndex = 0;
+			    		for(int eIndex = 0; eIndex < eventList.size(); eIndex++) {
+			    			if (eventList.get(eIndex).getName().equals(eventName)) {
+								eventIndex = eIndex;
+							}
+			    		}
+			    		//duplicate test end
 						if(state[eventIndex] == 1) {
 							//check if there is a sequence
 				    		if (seqList.isEmpty()) {
@@ -781,7 +940,9 @@ public class Transformer {
 					    		//break;
 							}else {
 								for(int k = 0; k < seqList.size(); k++) {
-									if (seqList.get(k).getEvents().contains(eventList.get(eventIndex))) {
+									//if (seqList.get(k).getEvents().contains(eventList.get(eventIndex))) {
+									//duplicate test if
+									if(seqList.get(k).getEvents().contains(checkGate.getChildEvent().get(j))) {
 										if(seqFailed[k] == false) {
 											xORCheck++;
 											//break;
@@ -846,7 +1007,16 @@ public class Transformer {
 		        int series = 0;
 		        for(int j = 0 ; j < childSequencePOR.size(); j++) {
 		        	if(childSequencePOR.get(j).eClass().getName() == "Event") {
-		        		int childIndex = eventList.indexOf(childSequencePOR.get(j));
+		        		//int childIndex = eventList.indexOf(childSequencePOR.get(j));
+		        		//duplicate test
+			    		String eventName = checkGate.getChildEvent().get(j).getName();
+			    		int childIndex = 0;
+			    		for(int eIndex = 0; eIndex < eventList.size(); eIndex++) {
+			    			if (eventList.get(eIndex).getName().equals(eventName)) {
+								childIndex = eIndex;
+							}
+			    		}
+			    		//duplicate test end
 		        		if(failSafe == false) {
 		        			if(state[childIndex] == 1) {
 		        				//check if we have a sequence dependency
@@ -858,7 +1028,9 @@ public class Transformer {
 			        				}
 		        				}else {
 		        					for(int k = 0; k < seqList.size(); k++) {
-										if (seqList.get(k).getEvents().contains(eventList.get(childIndex))) {
+										//if (seqList.get(k).getEvents().contains(eventList.get(childIndex))) {
+		        						//duplicate test if
+		        						if(seqList.get(k).getEvents().contains(checkGate.getChildEvent().get(j))) {
 											if(seqFailed[k] == false) {
 												if(series  == j) {
 						        					series++;
@@ -911,13 +1083,24 @@ public class Transformer {
 			    Spare tmpSpare = (Spare) checkGate;
 			    if(!checkGate.getChildEvent().isEmpty()) {
 			    	for(int j = 0; j < checkGate.getChildEvent().size(); j++) {
-			    		int eventIndex = eventList.indexOf(checkGate.getChildEvent().get(j));
+			    		//int eventIndex = eventList.indexOf(checkGate.getChildEvent().get(j));
+			    		//duplicate test
+			    		String eventName = checkGate.getChildEvent().get(j).getName();
+			    		int eventIndex = 0;
+			    		for(int eIndex = 0; eIndex < eventList.size(); eIndex++) {
+			    			if (eventList.get(eIndex).getName().equals(eventName)) {
+								eventIndex = eIndex;
+							}
+			    		}
+			    		//duplicate test end
 			    		if((state[eventIndex] == 1) && !tmpSpare.getSpares().contains(checkGate.getChildEvent().get(j))) {
 			    			if (seqList.isEmpty()) {
 			    				failedChildren++;
 							}else {
 								for(int k = 0; k < seqList.size(); k++) {
-									if (seqList.get(k).getEvents().contains(eventList.get(eventIndex))) {
+									//if (seqList.get(k).getEvents().contains(eventList.get(eventIndex))) {
+									//duplicate test if
+									if(seqList.get(k).getEvents().contains(checkGate.getChildEvent().get(j))) {
 										if(seqFailed[k] == false) {
 											failedChildren++;
 										}
@@ -932,7 +1115,9 @@ public class Transformer {
 			    				failedSpares++;
 							}else {
 								for(int k = 0; k < seqList.size(); k++) {
-									if (seqList.get(k).getEvents().contains(eventList.get(eventIndex))) {
+									//if (seqList.get(k).getEvents().contains(eventList.get(eventIndex))) {
+									//duplicate test if
+									if(seqList.get(k).getEvents().contains(checkGate.getChildEvent().get(j))) {
 										if(seqFailed[k] == false) {
 											failedSpares++;
 										}
@@ -947,15 +1132,17 @@ public class Transformer {
 			    if(!checkGate.getChildGate().isEmpty()) {
 			    	for(int j = 0; j < checkGate.getChildGate().size(); j++) {
 			    		int gateIndex = gateList.indexOf(checkGate.getChildGate().get(j)) + eventList.size();
-			    		if(state[gateIndex] == 1 && !tmpSpare.getSpares().contains(checkGate.getChildGate().get(j))) {
+			    		//if(state[gateIndex] == 1 && !tmpSpare.getSpares().contains(checkGate.getChildGate().get(j))) {
+			    		if(state[gateIndex] == 1) {
 			    			failedChildren++;
 			    		}
-			    		if((state[gateIndex] == 1) && tmpSpare.getSpares().contains(checkGate.getChildGate().get(j))) {
-			    			failedSpares++;
-			    		}
+			    		//if((state[gateIndex] == 1) && tmpSpare.getSpares().contains(checkGate.getChildGate().get(j))) {
+			    			//failedSpares++;
+			    		//}
 			    	}
 			    }
 			    int functioningSpares = tmpSpare.getSpares().size() - failedSpares;
+			    //System.out.println(failedChildren +", "+failedSpares+", "+functioningSpares);
 			    if(failedChildren > functioningSpares) {
 			    	state[i] = 1;
 			    }
@@ -1060,6 +1247,126 @@ public class Transformer {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		
+	}
+	
+	public void saveTransformationData(String folderPath, String folderName) {
+		
+		//make  a new folder for the data
+		File tmpFolder = new File(folderPath);
+		File folder = new File(tmpFolder, folderName);
+		//System.out.println(folder.getAbsolutePath());
+		if (!folder.exists()) {
+            folder.mkdir();
+        }
+		
+		//save the events by name(to do: make IDs)
+		//1. create the file if none exists
+		System.out.println(folder.getAbsolutePath());
+		File events = new File(folder.getAbsolutePath(), "Events.txt");
+		if (!events.getParentFile().mkdirs()) {
+			events.getParentFile().mkdirs();
+		}
+		try {
+			events.createNewFile();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		//2. write the events
+		PrintWriter eventWriter = null;
+		try {
+			eventWriter = new PrintWriter(events.getAbsolutePath());
+			for(int i = 0; i < eventList.size(); i++) {
+				eventWriter.println(eventList.get(i).getName());
+			}
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} finally {
+			eventWriter.close();
+		}
+		
+		//save gates + gate types
+		//1. create the file if it doesn't exist
+		File gates = new File(folder.getAbsolutePath(), "Gates.txt");
+		if (!events.getParentFile().mkdirs()) {
+			events.getParentFile().mkdirs();
+		}
+		try {
+			events.createNewFile();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		//2. write the gate data
+		PrintWriter gateWriter = null;
+		try {
+			gateWriter = new PrintWriter(gates.getAbsolutePath());
+			for(int i = 0; i < gateList.size(); i++) {
+				gateWriter.println(gateList.get(i).getName() + ", " + gateList.get(i).eClass().getName());
+			}
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} finally {
+			gateWriter.close();
+		}
+		
+		//save states
+		//1. create the file 
+		File states = new File(folder.getAbsoluteFile(), "States.txt");
+		if (!states.getParentFile().mkdirs()) {
+			states.getParentFile().mkdirs();
+		}
+		try {
+			states.createNewFile();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		//2. write state data
+		PrintWriter stateWriter = null;
+		try {
+			stateWriter = new PrintWriter(states.getAbsolutePath());
+			for(int i = 0; i < stateList.size(); i++) {
+				stateWriter.println(Arrays.toString(stateList.get(i)));
+			}
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} finally {
+			stateWriter.close();
+		}
+		
+		//save transitions
+		//1. create file
+		File transitions = new File(folder.getAbsoluteFile(), "Transitions.txt");
+		if (!transitions.getParentFile().mkdirs()) {
+			transitions.getParentFile().mkdirs();
+		}
+		try {
+			transitions.createNewFile();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		//2. save transition data
+		PrintWriter transitionWriter = null;
+		try {
+			transitionWriter = new PrintWriter(transitions.getAbsolutePath());
+			for(int i = 0; i < transitionList.size(); i++) {
+				transitionWriter.println(Arrays.toString(transitionList.get(i)));
+			}
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} finally {
+			transitionWriter.close();
+		}
+		
+		//failsafe?
+		//check later
 		
 	}
 	

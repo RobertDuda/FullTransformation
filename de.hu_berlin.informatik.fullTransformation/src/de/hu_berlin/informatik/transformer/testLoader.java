@@ -29,9 +29,9 @@ public class testLoader {
 
 	public static void main(String[] args) {
 		
-		String tmp ="File:///C:/Users/Rob X220/runtime-EclipseApplication/de.hu_berlin.informatik.UpdateDFTs/AND/and2.dynamicfaulttree";
+		String tmp ="File:///C:/Users/Rob X220/runtime-EclipseApplication/de.hu_berlin.informatik.UpdateDFTs/Example/Example1.1.dynamicfaulttree";
 		URI testDFT_URI = URI.createURI(tmp);
-		String uri = "/C:/Users/Rob%20X220/runtime-EclipseApplication/de.hu_berlin.informatik.UpdateCTMCs/PAND/pand4.ctmc";
+		String uri = "/C:/Users/Rob%20X220/runtime-EclipseApplication/de.hu_berlin.informatik.UpdateCTMCs/Example/Example1.1.ctmc";
 		
 		
 		DFT dft;
@@ -66,15 +66,31 @@ public class testLoader {
 			System.out.println(dftToCdmc.getFunctionalDependencyList().get(m).getName());
 		}
 		
+		//test duplicate
+		
+		
 		//dftToCdmc.transformation(true); merging, probably shelved
 		dftToCdmc.transformation();
 		
-		//String uri = "/C:/Users/Rob%20X220/runtime-EclipseApplication/de.hu_berlin.informatik.UpdateCTMCs/pand3.ctmc";
+		//String uri = "/C:/Users/Rob%20X220/runtime-EclipseApplication/de.hu_berlin.informatik.UpdateCTMCs/and3.ctmc";
 		
-		//dftToCdmc.buildCTMC(uri);
+		dftToCdmc.buildCTMC(uri);
 		
 		System.out.println("transformed like a boss!");
 		//transformation test end
+		
+		
+		//testing preserving data for incremental transformation/update
+		String folderPath = "C:/Users/Rob X220/runtime-EclipseApplication/de.hu_berlin.informatik.UpdateDFTs/Example/";
+		/*File currentFolder = new File(folder);
+		File workingFolder = new File(currentFolder, "DATA2");
+		System.out.println(workingFolder.getAbsolutePath());
+		if (!workingFolder.exists()) {
+            workingFolder.mkdir();
+        }*/
+		String folderName = dft.getName() + " Data";
+		dftToCdmc.saveTransformationData(folderPath, folderName);
+		System.out.println("made a new folder at " + folderPath+folderName);
 		
 		//end of test
 		System.out.println("ok!spaghetti better than mod pizza?");
